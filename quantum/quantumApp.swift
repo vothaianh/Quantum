@@ -12,6 +12,12 @@ struct quantumApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .tint(Color("AccentColor"))
+                .onAppear {
+                    if let window = NSApplication.shared.windows.first {
+                        window.zoom(nil)
+                    }
+                }
         }
     }
 }
