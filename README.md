@@ -221,7 +221,7 @@ Quantum isn't an editor with AI bolted on as an afterthought. It's an **AI IDE**
 
 ```bash
 # Clone the repo
-git clone https://github.com/nicktho/quantum.git
+git clone https://github.com/vothaianh/Quantum.git
 
 # Open in Xcode
 open quantum.xcodeproj

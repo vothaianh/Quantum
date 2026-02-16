@@ -42,24 +42,29 @@ struct TerminalPanelView: View {
                 .fill(Theme.border)
                 .frame(height: 1)
 
-            if let tab = state.selectedTerminalTab {
-                TerminalTabView(tab: tab)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .background(Theme.bgTerminal)
-                    .id(tab.id)
-            } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "terminal")
-                        .font(.system(size: 36))
-                        .foregroundStyle(Theme.textMuted)
-                    Text("Click + to open a terminal")
-                        .font(.zoomed(size: 12, zoom: zoom))
-                        .foregroundStyle(Theme.textSecondary)
+            ZStack {
+                ForEach(state.terminalTabs) { tab in
+                    let isActive = state.selectedTerminalTabID == tab.id
+                    TerminalTabView(tab: tab, isActive: isActive)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
+                        .opacity(isActive ? 1 : 0)
+                        .allowsHitTesting(isActive)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.bgTerminal)
+
+                if state.terminalTabs.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "terminal")
+                            .font(.system(size: 36))
+                            .foregroundStyle(Theme.textMuted)
+                        Text("Click + to open a terminal")
+                            .font(.zoomed(size: 12, zoom: zoom))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Theme.bgTerminal)
         }
         .clipped()
     }

@@ -161,6 +161,7 @@ private struct ProjectsPanel: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
         panel.message = "Select a project folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         state.addToRecents(url)
@@ -311,6 +312,34 @@ private struct FileTreePanel: View {
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                 Spacer()
+                Button {
+                    newItemName = ""
+                    isCreatingFile = true
+                    isCreatingFolder = false
+                } label: {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Theme.accent)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.borderless)
+                .help("New File")
+                Button {
+                    newItemName = ""
+                    isCreatingFolder = true
+                    isCreatingFile = false
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Theme.accent)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.borderless)
+                .help("New Folder")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)

@@ -84,6 +84,13 @@ struct ContentView: View {
                                 }
                                 .padding(.top, 6)
                                 .padding(.bottom, 6)
+                                .background(
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture(count: 2) {
+                                            NSApp.keyWindow?.zoom(nil)
+                                        }
+                                )
 
                                 Rectangle()
                                     .fill(Theme.border)
@@ -287,6 +294,7 @@ struct ContentView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
         panel.message = "Select a project folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         state.openProject(at: url)

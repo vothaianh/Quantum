@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import CoreServices
 
 extension Notification.Name {
     static let fileSaved = Notification.Name("fileSaved")
@@ -37,6 +38,69 @@ final class AppState {
     var activeGitRoot: URL?
     var activeGitBranch: String = ""
     var unpulledCommits: [GitCommitLog] = []
+
+    // MARK: - File System Watcher
+
+    private var fsEventStream: FSEventStreamRef?
+    private var fileTreeRefreshWork: DispatchWorkItem?
+
+    func startFileWatcher() {
+        stopFileWatcher()
+        guard let projectURL else { return }
+        let path = projectURL.path as CFString
+        let paths = [path] as CFArray
+
+        var context = FSEventStreamContext()
+        context.info = Unmanaged.passUnretained(self).toOpaque()
+
+        let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
+            guard let info else { return }
+            let state = Unmanaged<AppState>.fromOpaque(info).takeUnretainedValue()
+            DispatchQueue.main.async { state.scheduleFileTreeRefresh() }
+        }
+
+        let stream = FSEventStreamCreate(
+            nil, callback, &context, paths,
+            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+            1.0,  // 1 second latency to batch events
+            UInt32(kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents)
+        )
+
+        if let stream {
+            FSEventStreamScheduleWithRunLoop(stream, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+            FSEventStreamStart(stream)
+            fsEventStream = stream
+        }
+    }
+
+    func stopFileWatcher() {
+        if let stream = fsEventStream {
+            FSEventStreamStop(stream)
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            fsEventStream = nil
+        }
+        fileTreeRefreshWork?.cancel()
+    }
+
+    private func scheduleFileTreeRefresh() {
+        fileTreeRefreshWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.refreshFileTree()
+        }
+        fileTreeRefreshWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    func refreshFileTree() {
+        guard let projectURL else { return }
+        Task.detached {
+            let root = FileService.loadDirectory(at: projectURL)
+            await MainActor.run {
+                self.rootFileItem = root
+            }
+        }
+    }
 
     // MARK: - File Save Observer
 
@@ -508,6 +572,7 @@ final class AppState {
     // MARK: - Recent Projects
 
     private static let recentProjectsKey = "recentProjects"
+    private static let lastOpenedProjectKey = "lastOpenedProject"
     private static let maxRecents = 10
 
     var recentProjects: [URL] = []
@@ -583,15 +648,38 @@ final class AppState {
     }
 
     func restoreLastProject() {
-        guard projectURL == nil, let last = recentProjects.first else { return }
-        let didAccess = last.startAccessingSecurityScopedResource()
-        defer { if didAccess { last.stopAccessingSecurityScopedResource() } }
-        guard FileManager.default.fileExists(atPath: last.path) else { return }
-        openProject(at: last)
+        guard projectURL == nil else { return }
+        if let url = loadLastOpenedProject(), FileManager.default.fileExists(atPath: url.path) {
+            openProject(at: url)
+            return
+        }
+        // Fallback to first recent project
+        if let last = recentProjects.first {
+            let didAccess = last.startAccessingSecurityScopedResource()
+            defer { if didAccess { last.stopAccessingSecurityScopedResource() } }
+            guard FileManager.default.fileExists(atPath: last.path) else { return }
+            openProject(at: last)
+        }
+    }
+
+    private func saveLastOpenedProject(_ url: URL) {
+        if let bookmark = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
+            UserDefaults.standard.set(bookmark, forKey: Self.lastOpenedProjectKey)
+        }
+    }
+
+    private func loadLastOpenedProject() -> URL? {
+        guard let data = UserDefaults.standard.data(forKey: Self.lastOpenedProjectKey) else { return nil }
+        var stale = false
+        guard let url = try? URL(resolvingBookmarkData: data, options: .withSecurityScope, bookmarkDataIsStale: &stale) else { return nil }
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        return url
     }
 
     func openProject(at url: URL) {
         saveSession() // Save current project state before switching
+        stopFileWatcher()
         terminalTabs.removeAll()
         openEditorTabs.removeAll()
         selectedEditorTabID = nil
@@ -599,6 +687,7 @@ final class AppState {
         projectURL = url
         rootFileItem = nil
         addToRecents(url)
+        saveLastOpenedProject(url)
 
         // Spawn default terminal
         let tab = TerminalTab(workingDirectory: url)
@@ -619,6 +708,7 @@ final class AppState {
 
         refreshGit()
         startAutoFetch()
+        startFileWatcher()
 
         // Restore saved session state after tree loads
         restoreSession()
