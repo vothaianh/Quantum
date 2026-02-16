@@ -19,6 +19,12 @@
 
 ---
 
+<p align="center">
+  <img src="screenshot.png" alt="Quantum IDE" width="800">
+</p>
+
+---
+
 ## What is Quantum?
 
 Quantum is a **native AI-powered IDE for macOS** built from the ground up with **SwiftUI** and **Apple's own frameworks** — no Electron, no web views wrapping the entire app, no compromises.
